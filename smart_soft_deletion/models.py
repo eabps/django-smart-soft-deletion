@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models.fields.related import ForeignKey, OneToOneField
 
 
 def _related_on_delete(obj, *args, **kwargs):
@@ -53,7 +54,7 @@ class SoftDeletionQuerySet(models.query.QuerySet):
         else:
             for obj in self:
                 _related_on_delete(obj, *args, **kwargs)
-            super(SoftDeletionQuerySet, self).update(is_deleted=True)
+            super(SoftDeletionQuerySet, self).update(_is_deleted=True)
     
     def retore(self):
         self.update(is_deleted=True)
@@ -73,16 +74,20 @@ class SoftDeletionMixinMananger(models.Manager):
         if self.with_deleted:
             return qs
         else:
-            return qs.filter(is_deleted=False)
+            return qs.filter(_is_deleted=False)
 
 
 class SoftDeletionMixin(models.Model):
-    is_deleted = models.BooleanField(null=False, default=False)
+    _is_deleted = models.BooleanField(null=False, default=False)
     objects = SoftDeletionMixinMananger()
     objects_with_deleted = SoftDeletionMixinMananger(deleted=True)
     
     class Meta:
         abstract = True
+    
+    @property
+    def is_deleted(self):
+        return self._is_deleted
     
     def delete(self, *args, **kwargs):
         hard_deletion = kwargs.get('hard_deletion', False)
@@ -90,10 +95,33 @@ class SoftDeletionMixin(models.Model):
             kwargs.pop('hard_deletion')
             super(SoftDeletionMixin, self).delete(*args, **kwargs)
         else:
-            self.is_deleted = True
+            self._is_deleted = True
             _related_on_delete(self, *args, **kwargs)
             self.save()
     
     def restore(self):
-        self.is_deleted = False
+        fields = [field for field in self._meta.get_fields() if isinstance(field, (ForeignKey, OneToOneField,))]
+        for field in fields:
+            obj = getattr(self, field.name)
+            try:
+                if obj is not None: # if on_delete is not SET_NULL
+                    if obj.is_deleted: # if obj is instance of SoftDeletionMixin
+                        raise ValueError("{s}.{fk}.is_deleted is True. Restore this object before attempting to restoring {s}.".format(s=self.__class__, fk=field.name))
+            except AttributeError:
+                continue
+
+        self._is_deleted = False
         self.save()
+    
+    def save(self, *args, **kwargs):
+        fields = [field for field in self._meta.get_fields() if isinstance(field, (ForeignKey, OneToOneField,))]
+        for field in fields:
+            obj = getattr(self, field.name)
+            try:
+                if obj is not None: # if on_delete is not SET_NULL
+                    if obj.is_deleted: # if obj is instance of SoftDeletionMixin
+                        raise ValueError("{s}.{fk}.is_deleted is True. Restore this object before attempting to save {s}.".format(s=self.__class__, fk=field.name))
+            except AttributeError:
+                continue
+
+        super(SoftDeletionMixin, self).save(*args, **kwargs)

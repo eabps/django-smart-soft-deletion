@@ -4,7 +4,7 @@ from django.db import models
 from . models import Country, Category, Industry, Product
 
 
-class CreateTestCase(TestCase):
+class DeleteTestCase(TestCase):
     def setUp(self):
         self.japan = Country.objects.create(name="Japan")
         self.usa = Country.objects.create(name="USA")
@@ -128,3 +128,55 @@ class CreateTestCase(TestCase):
         Country.objects.all().delete(hard_deletion=True)
         bluboard.refresh_from_db()
         self.assertEqual(None, bluboard.country)
+
+
+class RestoreTestCase(TestCase):
+    def setUp(self):
+        self.japan = Country.objects.create(name="Japan")
+        self.usa = Country.objects.create(name="USA")
+        self.toys = Category.objects.create(name="Toys")
+        self.sony = Industry.objects.create(name="Sony", country=self.japan)
+        self.microsoft = Industry.objects.create(name="Microsoft", country=self.usa)
+        self.play_station = Product.objects.create(name="Play Station", category=self.toys, industry=self.sony)
+        self.xbox = Product.objects.create(name="Xbox", category=self.toys, industry=self.microsoft)
+    
+    def test_restore(self):
+        self.xbox.delete()
+        self.assertEqual(True, self.xbox.is_deleted)
+        self.xbox.restore()
+        self.assertEqual(False, self.xbox.is_deleted)
+    
+
+    def test_restore_with_fk_deleted(self):
+        self.sony.delete()
+        self.play_station.refresh_from_db()
+        self.assertEqual(True, self.play_station.is_deleted)
+        
+        # CASCADE
+        with self.assertRaises(ValueError):
+            self.play_station.restore()
+        
+        # SETNULL
+        self.japan.delete()
+        self.sony.refresh_from_db()
+        self.sony.restore()
+        self.assertEqual(None, self.sony.country)
+
+
+class CreateTestCase(TestCase):
+    def setUp(self):
+        self.japan = Country.objects.create(name="Japan")
+        self.usa = Country.objects.create(name="USA")
+        self.toys = Category.objects.create(name="Toys")
+        self.sony = Industry.objects.create(name="Sony", country=self.japan)
+        self.microsoft = Industry.objects.create(name="Microsoft", country=self.usa)
+        self.play_station = Product.objects.create(name="Play Station", category=self.toys, industry=self.sony)
+        self.xbox = Product.objects.create(name="Xbox", category=self.toys, industry=self.microsoft)
+    
+    def test_create_with_fk_deleted(self):
+        self.japan.delete()
+        self.japan.refresh_from_db()
+        
+        with self.assertRaises(ValueError):
+            honda = Industry.objects.create(name='Honda', country=self.japan)
+    
