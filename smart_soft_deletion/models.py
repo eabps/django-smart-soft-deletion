@@ -55,9 +55,6 @@ class SoftDeletionQuerySet(models.query.QuerySet):
             for obj in self:
                 _related_on_delete(obj, *args, **kwargs)
             super(SoftDeletionQuerySet, self).update(_is_deleted=True)
-    
-    def retore(self):
-        self.update(is_deleted=True)
 
 
 class SoftDeletionMixinMananger(models.Manager):
@@ -75,6 +72,12 @@ class SoftDeletionMixinMananger(models.Manager):
             return qs
         else:
             return qs.filter(_is_deleted=False)
+    
+    def restore(self):
+        qs = self.get_queryset()
+        for obj in qs:
+            obj.restore()
+        return qs
 
 
 class SoftDeletionMixin(models.Model):

@@ -4,7 +4,7 @@ from django.db import models
 from . models import Country, Category, Industry, Product
 
 
-class DeleteTestCase(TestCase):
+class CreateTestCase(TestCase):
     def setUp(self):
         self.japan = Country.objects.create(name="Japan")
         self.usa = Country.objects.create(name="USA")
@@ -20,6 +20,24 @@ class DeleteTestCase(TestCase):
         self.assertEqual("Toys", Category.objects.get(name='Toys').name)
         self.assertEqual("Xbox", Product.objects.get(name='Xbox').name)
         self.assertEqual(2, Product.objects.count())
+    
+    def test_create_with_fk_deleted(self):
+        self.japan.delete()
+        self.japan.refresh_from_db()
+        
+        with self.assertRaises(ValueError):
+            honda = Industry.objects.create(name='Honda', country=self.japan)
+
+
+class DeleteTestCase(TestCase):
+    def setUp(self):
+        self.japan = Country.objects.create(name="Japan")
+        self.usa = Country.objects.create(name="USA")
+        self.toys = Category.objects.create(name="Toys")
+        self.sony = Industry.objects.create(name="Sony", country=self.japan)
+        self.microsoft = Industry.objects.create(name="Microsoft", country=self.usa)
+        self.play_station = Product.objects.create(name="Play Station", category=self.toys, industry=self.sony)
+        self.xbox = Product.objects.create(name="Xbox", category=self.toys, industry=self.microsoft)
     
     def test_soft_deletion_and_restore(self):
         self.assertEqual(False, self.xbox.is_deleted)
@@ -43,6 +61,9 @@ class DeleteTestCase(TestCase):
         self.microsoft.delete()
         self.assertEqual(1, Industry.objects.all().count())
         self.assertEqual(2, Industry.objects_with_deleted.all().count())
+        self.assertEqual(self.sony, Industry.objects.last())
+        self.assertEqual(self.microsoft, Industry.objects_with_deleted.last())
+        
     
     def test_hard_deletion(self):
         self.assertEqual(False, self.xbox.is_deleted)
@@ -76,7 +97,6 @@ class DeleteTestCase(TestCase):
         # ON_DELETE = SET (No implemented yet)
         """
 
-    
     def test_hard_deletion_with_fk(self):
         self.assertEqual(False, self.sony.is_deleted)
         self.assertEqual(False, self.play_station.is_deleted)
@@ -161,22 +181,10 @@ class RestoreTestCase(TestCase):
         self.sony.refresh_from_db()
         self.sony.restore()
         self.assertEqual(None, self.sony.country)
-
-
-class CreateTestCase(TestCase):
-    def setUp(self):
-        self.japan = Country.objects.create(name="Japan")
-        self.usa = Country.objects.create(name="USA")
-        self.toys = Category.objects.create(name="Toys")
-        self.sony = Industry.objects.create(name="Sony", country=self.japan)
-        self.microsoft = Industry.objects.create(name="Microsoft", country=self.usa)
-        self.play_station = Product.objects.create(name="Play Station", category=self.toys, industry=self.sony)
-        self.xbox = Product.objects.create(name="Xbox", category=self.toys, industry=self.microsoft)
     
-    def test_create_with_fk_deleted(self):
-        self.japan.delete()
-        self.japan.refresh_from_db()
-        
-        with self.assertRaises(ValueError):
-            honda = Industry.objects.create(name='Honda', country=self.japan)
-    
+    def test_queryset_restore(self):
+        products = Product.objects.all().delete()
+        self.assertEqual(0, Product.objects.all().count())
+        self.assertEqual(2, Product.objects_with_deleted.all().count())
+        Product.objects_with_deleted.restore()
+        self.assertEqual(2, Product.objects.all().count())
