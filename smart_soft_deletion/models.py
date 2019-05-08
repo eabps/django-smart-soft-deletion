@@ -11,7 +11,12 @@ def _related_on_delete(obj, *args, **kwargs):
         
         filter = {relation.name: obj}
                 
-        related_queryset = relation.model.objects_with_deleted.filter(**filter)
+        try:
+            related_queryset = relation.model.objects_with_deleted.filter(**filter)
+        except AttributeError: # if relation is many to many
+            related_queryset = relation.model.objects.filter(**filter)
+            #continue
+
         #print('related_queryset: ', related_queryset)
         
         if on_delete is models.CASCADE:
@@ -29,7 +34,7 @@ def _related_on_delete(obj, *args, **kwargs):
                 raise models.ProtectedError()
     
         else:
-            print('on_delete: ', on_delete)
+            #print('on_delete: ', on_delete)
             raise NotImplementedError('Soft Deletion does not support fields with on_delete SET and SET_DEFAULT')
 
 

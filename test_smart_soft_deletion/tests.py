@@ -1,16 +1,25 @@
 from django.test import TestCase
 from django.db import models
 
-from . models import Country, Category, Industry, Product
+from . models import Country, Category, Founder, Industry, Product
 
 
 class CreateTestCase(TestCase):
     def setUp(self):
         self.japan = Country.objects.create(name="Japan")
         self.usa = Country.objects.create(name="USA")
-        self.toys = Category.objects.create(name="Toys")
+        
+        self.bill_gates = Founder.objects.create(name="Bill Gates")
+        self.akio_morita = Founder.objects.create(name="Akio Morita")
+        
         self.sony = Industry.objects.create(name="Sony", country=self.japan)
         self.microsoft = Industry.objects.create(name="Microsoft", country=self.usa)
+        
+        self.sony.founders.add(self.akio_morita)
+        self.microsoft.founders.add(self.bill_gates)
+        
+        self.toys = Category.objects.create(name="Toys")
+        
         self.play_station = Product.objects.create(name="Play Station", category=self.toys, industry=self.sony)
         self.xbox = Product.objects.create(name="Xbox", category=self.toys, industry=self.microsoft)
     
@@ -27,15 +36,45 @@ class CreateTestCase(TestCase):
         
         with self.assertRaises(ValueError):
             honda = Industry.objects.create(name='Honda', country=self.japan)
+    
+    def test_m2m_fk_deleted(self):
+        # filter not return foreignkey deleted objects 
+        masaru_ibuka = Founder.objects.create(name="Masaru Ibuka")
+        self.sony.founders.add(masaru_ibuka)
+        self.assertEqual(2, self.sony.founders.count())
+        
+        masaru_ibuka.delete()
+        self.assertEqual(1, self.sony.founders.count())
 
+        # If an fk obj is deleted, main obj is not deleted
+        self.bill_gates.delete()
+        self.microsoft.refresh_from_db()
+        self.assertEqual(False, self.microsoft.is_deleted)
+    
+    def test_m2m_fk_restore(self):
+        # If an fk obj is restored, its relationships is not restored
+        self.bill_gates.delete()
+        self.assertEqual(0, self.microsoft.founders.count())
+        self.bill_gates.restore()
+        self.assertEqual(0, self.microsoft.founders.count())
 
 class DeleteTestCase(TestCase):
     def setUp(self):
         self.japan = Country.objects.create(name="Japan")
         self.usa = Country.objects.create(name="USA")
-        self.toys = Category.objects.create(name="Toys")
+        
+        self.bill_gates = Founder.objects.create(name="Bill Gates")
+        self.akio_morita = Founder.objects.create(name="Akio Morita")
+        self.masaru_ibuka = Founder.objects.create(name="Masaru Ibuka")
+        
         self.sony = Industry.objects.create(name="Sony", country=self.japan)
+        self.sony.founders.add(self.akio_morita, self.masaru_ibuka)
+        
         self.microsoft = Industry.objects.create(name="Microsoft", country=self.usa)
+        self.microsoft.founders.add(self.bill_gates)
+        
+        self.toys = Category.objects.create(name="Toys")
+        
         self.play_station = Product.objects.create(name="Play Station", category=self.toys, industry=self.sony)
         self.xbox = Product.objects.create(name="Xbox", category=self.toys, industry=self.microsoft)
     
