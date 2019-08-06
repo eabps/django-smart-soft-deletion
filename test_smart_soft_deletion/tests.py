@@ -103,7 +103,6 @@ class DeleteTestCase(TestCase):
         self.assertEqual(self.sony, Industry.objects.last())
         self.assertEqual(self.microsoft, Industry.objects_with_deleted.last())
         
-    
     def test_hard_deletion(self):
         self.assertEqual(False, self.xbox.is_deleted)
 
@@ -147,7 +146,6 @@ class DeleteTestCase(TestCase):
         with self.assertRaises(Product.DoesNotExist):
             self.play_station.refresh_from_db()
             
-    
     def test_queryset_soft_deletion(self):
         Product.objects.all().delete()
         self.assertEqual(0, Product.objects.all().count())
